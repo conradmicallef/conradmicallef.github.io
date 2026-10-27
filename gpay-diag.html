@@ -1,0 +1,39 @@
+<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>gpay diag</title>
+<style>body{font:14px monospace;margin:12px}td{padding:2px 8px;border-bottom:1px solid #ddd}.t{color:#070}.f{color:#a00}</style>
+<h3>Google Pay isReadyToPay (TEST)</h3>
+<div id="ua"></div><pre id="out">running...</pre><table id="t"></table>
+<script src="https://pay.google.com/gp/p/js/pay.js"></script>
+<script>
+document.getElementById('ua').textContent = navigator.userAgent;
+var nets = ['VISA','MASTERCARD','AMEX','DISCOVER','JCB','MAESTRO','ELECTRON','ELO','INTERAC'];
+var auths = [['CRYPTOGRAM_3DS'],['PAN_ONLY'],['PAN_ONLY','CRYPTOGRAM_3DS']];
+(async function () {
+  var out = document.getElementById('out'), t = document.getElementById('t');
+  try {
+    var c = new google.payments.api.PaymentsClient({environment: 'TEST'});
+    var ask = function (a, n) {
+      return c.isReadyToPay({apiVersion: 2, apiVersionMinor: 0, allowedPaymentMethods: [{type: 'CARD',
+        parameters: {allowedAuthMethods: a, allowedCardNetworks: n}}]})
+        .then(function (r) { return String(r.result); }).catch(function (e) { return 'error ' + (e && (e.statusCode || e.message) || e); });
+    };
+    t.insertAdjacentHTML('beforeend', '<tr><td>networks</td>' + auths.map(function (a) { return '<td>' + a.join('+') + '</td>'; }).join('') + '</tr>');
+    var row = async function (label, n) {
+      var cells = '';
+      for (var i = 0; i < auths.length; i++) {
+        var v = await ask(auths[i], n);
+        cells += '<td class="' + (v === 'true' ? 't' : 'f') + '">' + v + '</td>';
+      }
+      t.insertAdjacentHTML('beforeend', '<tr><td>' + label + '</td>' + cells + '</tr>');
+    };
+    await row('VISA+MC+AMEX (PayLolly)', ['VISA', 'MASTERCARD', 'AMEX']);
+    for (var i = 0; i < nets.length; i++) await row(nets[i], [nets[i]]);
+    var pr = 'n/a';
+    try {
+      pr = String(await new PaymentRequest([{supportedMethods: 'https://google.com/pay', data: {environment: 'TEST', apiVersion: 2, apiVersionMinor: 0,
+        allowedPaymentMethods: [{type: 'CARD', parameters: {allowedAuthMethods: ['CRYPTOGRAM_3DS'], allowedCardNetworks: ['VISA', 'MASTERCARD']}}]}}],
+        {total: {label: 't', amount: {currency: 'EUR', value: '1.00'}}}).canMakePayment());
+    } catch (e) { pr = 'error ' + e.message; }
+    out.textContent = 'PaymentRequest.canMakePayment (CRYPTOGRAM_3DS, VISA+MC): ' + pr;
+  } catch (e) { out.textContent = 'failed: ' + e.message; }
+})();
+</script>
